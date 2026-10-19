@@ -38,6 +38,11 @@ if "engine" not in st.session_state:
     sample_pdf = Path(__file__).parent / "sample_docs" / "enterprise_sla_policy.pdf"
     if sample_pdf.exists():
         st.session_state.engine.ingest_pdf(sample_pdf.read_bytes(), filename="enterprise_sla_policy.pdf")
+        st.session_state.active_doc_name = "enterprise_sla_policy.pdf (Preloaded Sample)"
+    else:
+        st.session_state.active_doc_name = "No document loaded"
+
+st.session_state.setdefault("active_doc_name", "enterprise_sla_policy.pdf (Preloaded Sample)")
 
 engine: RAGEngine = st.session_state.engine
 
@@ -175,9 +180,10 @@ with col_main:
                 with st.expander(f"📄 Page {cit.page_number} (Relevance Score: {cit.relevance_score * 100:.1f}%)"):
                     st.write(cit.snippet)
         else:
+            current_doc = st.session_state.get("active_doc_name", "the uploaded document")
             st.info("ℹ️ **Information Not Found in Document**")
             st.markdown(
-                f"The requested answer could not be found in `{st.session_state.active_doc_name}`."
+                f"The requested answer could not be found in `{current_doc}`."
             )
             st.caption(
                 "The vector relevance score fell below the retrieval threshold. "
