@@ -36,6 +36,7 @@ class QueryResponse(BaseModel):
     question: str
     answer: str
     answered_from_document: bool = Field(description="True if context was sufficient to answer")
+    answer_mode: str = Field(default="extractive_passage", description="'llm_generative' (OpenAI) or 'extractive_passage' (snippet extraction)")
     citations: List[SourceCitation] = Field(default_factory=list)
     latency_ms: float = 0.0
 

@@ -109,21 +109,31 @@ def compute_embedding(text: str, dim: int = 1024) -> List[float]:
 
 
 class RAGEngine:
-    def __init__(self, persist_dir: str = "./chroma_db", chunk_size: int = 600, chunk_overlap: int = 100):
+    def __init__(
+        self,
+        persist_dir: Optional[str] = None,
+        in_memory: bool = True,
+        chunk_size: int = 600,
+        chunk_overlap: int = 100,
+    ):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.splitter = RecursiveTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         self.persist_dir = persist_dir
+        self.in_memory = in_memory
         self.chunks: Dict[str, DocumentChunk] = {}
         self._init_vector_store()
 
     def _init_vector_store(self):
-        """Initializes ChromaDB or sets up vector storage."""
+        """Initializes ChromaDB (in-memory EphemeralClient or persistent) or fallback."""
         self.chroma_client = None
         self.collection = None
         try:
             import chromadb
-            self.chroma_client = chromadb.PersistentClient(path=self.persist_dir)
+            if self.in_memory or not self.persist_dir:
+                self.chroma_client = chromadb.EphemeralClient()
+            else:
+                self.chroma_client = chromadb.PersistentClient(path=self.persist_dir)
             self.collection = self.chroma_client.get_or_create_collection(
                 name="rag_documents",
                 metadata={"hnsw:space": "cosine"}
@@ -132,8 +142,25 @@ class RAGEngine:
             self.chroma_client = None
             self.collection = None
 
+    def reset(self):
+        """Clear previously indexed chunks and recreate collection to avoid document blending."""
+        self.chunks.clear()
+        if self.chroma_client:
+            try:
+                self.chroma_client.delete_collection("rag_documents")
+            except Exception:
+                pass
+            try:
+                self.collection = self.chroma_client.get_or_create_collection(
+                    name="rag_documents",
+                    metadata={"hnsw:space": "cosine"}
+                )
+            except Exception:
+                pass
+
     def ingest_pdf(self, file_bytes: bytes, filename: str) -> IngestionResponse:
-        """Extracts text per page and chunks with page number tracking."""
+        """Extracts text per page and chunks with page number tracking. Resets previous document state."""
+        self.reset()
         reader = PdfReader(BytesIO(file_bytes))
         total_pages = len(reader.pages)
         all_chunks: List[DocumentChunk] = []
@@ -169,7 +196,8 @@ class RAGEngine:
         )
 
     def ingest_text(self, text: str, filename: str) -> IngestionResponse:
-        """Extracts text and chunks with page 1 tracking."""
+        """Extracts text and chunks with page 1 tracking. Resets previous document state."""
+        self.reset()
         text_chunks = self.splitter.split_text(text)
         all_chunks = []
         for ch_idx, chunk_text in enumerate(text_chunks, start=1):
@@ -291,19 +319,25 @@ class RAGEngine:
         ]
 
         # Generate Grounded Answer
-        answer = self._generate_answer(request_question, valid_chunks)
+        answer, answer_mode = self._generate_answer(request_question, valid_chunks)
         latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
         return QueryResponse(
             question=request_question,
             answer=answer,
             answered_from_document=True,
+            answer_mode=answer_mode,
             citations=citations,
             latency_ms=latency_ms,
         )
 
-    def _generate_answer(self, question: str, retrieved_chunks: List[Tuple[DocumentChunk, float]]) -> str:
-        """Generates answer using LLM if OPENAI_API_KEY is present, or extracts grounded context."""
+    def _generate_answer(self, question: str, retrieved_chunks: List[Tuple[DocumentChunk, float]]) -> Tuple[str, str]:
+        """
+        Generates answer.
+        Returns (answer_text, answer_mode) where mode is:
+          - 'llm_generative' (when OpenAI gpt-4o-mini is active)
+          - 'extractive_passage' (when returning verified document excerpt)
+        """
         context_blocks = []
         for c, score in retrieved_chunks:
             context_blocks.append(f"[Page {c.page_number}]: {c.text}")
@@ -328,10 +362,10 @@ class RAGEngine:
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.0,
                 )
-                return resp.choices[0].message.content.strip()
+                return resp.choices[0].message.content.strip(), "llm_generative"
             except Exception:
                 pass
 
-        # Offline grounded synthesis: returns highest ranking excerpt with page reference
+        # Extractive snippet retrieval mode (transparent, non-generative)
         top_chunk, score = retrieved_chunks[0]
-        return f"According to page {top_chunk.page_number}: {top_chunk.text}"
+        return f"According to page {top_chunk.page_number}: {top_chunk.text}", "extractive_passage"

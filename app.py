@@ -27,10 +27,8 @@ st.markdown("""
 
 # Session state initialization
 if "engine" not in st.session_state:
-    import uuid
-    session_id = uuid.uuid4().hex[:8]
     st.session_state.engine = RAGEngine(
-        persist_dir=f"./chroma_db_{session_id}",
+        in_memory=True,
         chunk_size=600,
         chunk_overlap=100
     )
@@ -44,14 +42,23 @@ engine: RAGEngine = st.session_state.engine
 # Header
 st.title("📚 RAG Document Q&A Prototype")
 st.caption("Upload a PDF/text file, index into ChromaDB, and ask grounded questions with source page citations.")
-st.warning("🔒 **Privacy Notice:** This is a public demonstration prototype. Please test using sample documents and do not upload confidential or sensitive personal files.")
+st.warning(
+    "🔒 **Privacy Notice:** Documents are indexed in an ephemeral in-memory vector store (not persisted to disk). "
+    "Without an API key, the system returns exact extracted source passages. "
+    "If an OpenAI API key is configured, relevant excerpts are sent to OpenAI (GPT-4o-mini) to generate conversational answers. "
+    "Please test using public or sample documents. Max file size: 5MB."
+)
 
 # Sidebar: Document Management
 st.sidebar.header("📁 Document Ingestion")
-uploaded_file = st.sidebar.file_uploader("Upload PDF or TXT Document", type=["pdf", "txt", "md"])
+uploaded_file = st.sidebar.file_uploader("Upload PDF or TXT Document (Max 5MB)", type=["pdf", "txt", "md"])
 
 if uploaded_file is not None:
     if st.sidebar.button("⚡ Index Uploaded File", type="primary", use_container_width=True):
+        content = uploaded_file.getvalue()
+        if len(content) > 5 * 1024 * 1024:
+            st.sidebar.error("File exceeds the 5MB size limit for this prototype demo.")
+            st.stop()
         if uploaded_file.name.lower().endswith(".pdf"):
             res = engine.ingest_pdf(content, filename=uploaded_file.name)
         else:
@@ -103,7 +110,11 @@ with col_main:
 
         st.markdown("---")
         if response.answered_from_document:
-            st.success(f"**Answer (Generated in {response.latency_ms} ms):**")
+            if response.answer_mode == "llm_generative":
+                st.info("🤖 **Mode:** Generative LLM Synthesis (OpenAI GPT-4o-mini)")
+            else:
+                st.info("🔍 **Mode:** Extractive Passage Retrieval (Verified Document Excerpt)")
+            st.success(f"**Result (Processed in {response.latency_ms} ms):**")
             st.markdown(response.answer)
 
             st.markdown("#### 📖 Source Citations (Provenience)")
