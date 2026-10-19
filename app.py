@@ -39,8 +39,10 @@ if "engine" not in st.session_state:
     if sample_pdf.exists():
         st.session_state.engine.ingest_pdf(sample_pdf.read_bytes(), filename="enterprise_sla_policy.pdf")
         st.session_state.active_doc_name = "enterprise_sla_policy.pdf (Preloaded Sample)"
+        st.session_state.current_indexed_filename = "enterprise_sla_policy.pdf"
     else:
         st.session_state.active_doc_name = "No document loaded"
+        st.session_state.current_indexed_filename = None
 
 st.session_state.setdefault("active_doc_name", "enterprise_sla_policy.pdf (Preloaded Sample)")
 
@@ -61,19 +63,42 @@ st.sidebar.header("📁 Document Ingestion")
 uploaded_file = st.sidebar.file_uploader("Upload PDF or TXT Document (Max 5MB)", type=["pdf", "txt", "md"])
 
 if uploaded_file is not None:
-    if st.sidebar.button("⚡ Index Uploaded File", type="primary", use_container_width=True):
+    # Auto-index immediately whenever a new file is chosen
+    if st.session_state.get("current_indexed_filename") != uploaded_file.name:
         content = uploaded_file.getvalue()
         if len(content) > 5 * 1024 * 1024:
             st.sidebar.error("File exceeds the 5MB size limit for this prototype demo.")
             st.stop()
-        if uploaded_file.name.lower().endswith(".pdf"):
-            res = engine.ingest_pdf(content, filename=uploaded_file.name)
-        else:
-            text = content.decode("utf-8", errors="replace")
-            res = engine.ingest_text(text, filename=uploaded_file.name)
+        with st.sidebar.status("Indexing document into ChromaDB..."):
+            if uploaded_file.name.lower().endswith(".pdf"):
+                res = engine.ingest_pdf(content, filename=uploaded_file.name)
+            else:
+                text = content.decode("utf-8", errors="replace")
+                res = engine.ingest_text(text, filename=uploaded_file.name)
+        st.session_state.current_indexed_filename = uploaded_file.name
         st.session_state.active_doc_name = uploaded_file.name
-        st.sidebar.success(f"Indexed: {res.total_chunks} chunks ({res.total_pages} pages)")
+        st.sidebar.success(f"✅ Active: {res.total_chunks} chunks ({res.total_pages} page{'s' if res.total_pages != 1 else ''})")
         st.rerun()
+    else:
+        st.sidebar.success(f"✅ Active: `{uploaded_file.name}`")
+        if st.sidebar.button("🔄 Re-index Document", use_container_width=True):
+            content = uploaded_file.getvalue()
+            if uploaded_file.name.lower().endswith(".pdf"):
+                res = engine.ingest_pdf(content, filename=uploaded_file.name)
+            else:
+                text = content.decode("utf-8", errors="replace")
+                res = engine.ingest_text(text, filename=uploaded_file.name)
+            st.sidebar.success("Re-indexed successfully.")
+            st.rerun()
+else:
+    # If the user cleared the uploaded file, restore the preloaded sample
+    if st.session_state.get("current_indexed_filename") not in (None, "enterprise_sla_policy.pdf"):
+        sample_pdf = Path(__file__).parent / "sample_docs" / "enterprise_sla_policy.pdf"
+        if sample_pdf.exists():
+            engine.ingest_pdf(sample_pdf.read_bytes(), filename="enterprise_sla_policy.pdf")
+            st.session_state.active_doc_name = "enterprise_sla_policy.pdf (Preloaded Sample)"
+            st.session_state.current_indexed_filename = "enterprise_sla_policy.pdf"
+            st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"**Indexed Chunks:** `{len(engine.chunks)}`")
