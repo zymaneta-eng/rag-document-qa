@@ -3,8 +3,10 @@ Streamlit Web UI for RAG Document Q&A Prototype.
 Provides an interactive, visual interface for uploading documents and asking grounded questions.
 """
 
-import streamlit as st
+import os
+import time
 from pathlib import Path
+import streamlit as st
 from rag_engine import RAGEngine
 
 st.set_page_config(
@@ -70,7 +72,41 @@ if uploaded_file is not None:
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"**Indexed Chunks:** `{len(engine.chunks)}`")
-st.sidebar.markdown(f"**Vector Store:** `ChromaDB (HNSW Cosine)`")
+st.sidebar.markdown(f"**Vector Store:** `ChromaDB (In-Memory HNSW)`")
+
+# Quota Limiter & LLM Settings
+st.sidebar.markdown("---")
+st.sidebar.subheader("🤖 LLM Engine & Quota")
+
+custom_openai_key = st.sidebar.text_input(
+    "Custom OpenAI Key (optional)",
+    type="password",
+    help="Enter your personal OpenAI key for unlimited queries"
+)
+
+MAX_FREE_LLM_CALLS = 5
+st.session_state.setdefault("llm_calls_made", 0)
+remaining_calls = max(0, MAX_FREE_LLM_CALLS - st.session_state.llm_calls_made)
+
+server_key = os.getenv("OPENAI_API_KEY")
+
+if custom_openai_key:
+    st.sidebar.success("🔑 Personal OpenAI Key Active (Unlimited)")
+    effective_key = custom_openai_key
+    allow_llm = True
+elif server_key:
+    if remaining_calls > 0:
+        st.sidebar.info(f"⚡ Demo Quota: {remaining_calls}/{MAX_FREE_LLM_CALLS} free LLM queries remaining")
+        effective_key = server_key
+        allow_llm = True
+    else:
+        st.sidebar.warning(f"⚠️ Demo Quota Exhausted: 0/{MAX_FREE_LLM_CALLS} left (Falling back to Extractive Mode)")
+        effective_key = None
+        allow_llm = False
+else:
+    st.sidebar.caption("ℹ️ Extractive Mode Active (No server OpenAI key configured)")
+    effective_key = None
+    allow_llm = False
 
 # Main Interface
 col_main, col_info = st.columns([2, 1])
@@ -105,8 +141,25 @@ with col_main:
     ask_btn = st.button("🔍 Submit Question", type="primary")
 
     if (ask_btn or preset_q) and user_query:
-        with st.spinner("Searching ChromaDB and generating answer..."):
-            response = engine.query(user_query, top_k=3, min_relevance=0.20)
+        # Rate limit cooldown check (at least 2 seconds between clicks)
+        current_time = time.time()
+        last_time = st.session_state.get("last_query_ts", 0)
+        if current_time - last_time < 2.0:
+            st.warning("Please wait a moment before sending another query.")
+            st.stop()
+        st.session_state.last_query_ts = current_time
+
+        with st.spinner("Searching ChromaDB and processing response..."):
+            response = engine.query(
+                user_query,
+                top_k=3,
+                min_relevance=0.20,
+                api_key=effective_key,
+                allow_llm=allow_llm,
+            )
+            # Increment quota count if a free server LLM query was consumed
+            if response.answer_mode == "llm_generative" and not custom_openai_key:
+                st.session_state.llm_calls_made += 1
 
         st.markdown("---")
         if response.answered_from_document:

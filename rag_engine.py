@@ -288,8 +288,15 @@ class RAGEngine:
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored[:top_k]
 
-    def query(self, request_question: str, top_k: int = 3, min_relevance: float = 0.20) -> QueryResponse:
-        """Main RAG Q&A query workflow with refusal logic and source citations."""
+    def query(
+        self,
+        request_question: str,
+        top_k: int = 3,
+        min_relevance: float = 0.20,
+        api_key: Optional[str] = None,
+        allow_llm: bool = True,
+    ) -> QueryResponse:
+        """Main RAG Q&A query workflow with refusal logic, citations, and optional LLM synthesis."""
         start_time = time.perf_counter()
 
         retrieved = self.retrieve(request_question, top_k=top_k)
@@ -318,8 +325,13 @@ class RAGEngine:
             for c, score in valid_chunks
         ]
 
-        # Generate Grounded Answer
-        answer, answer_mode = self._generate_answer(request_question, valid_chunks)
+        # Generate Grounded Answer (LLM if allowed & key present, else extractive)
+        answer, answer_mode = self._generate_answer(
+            request_question,
+            valid_chunks,
+            api_key=api_key if allow_llm else None,
+            allow_llm=allow_llm,
+        )
         latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
         return QueryResponse(
@@ -331,7 +343,14 @@ class RAGEngine:
             latency_ms=latency_ms,
         )
 
-    def _generate_answer(self, question: str, retrieved_chunks: List[Tuple[DocumentChunk, float]]) -> Tuple[str, str]:
+    def _generate_answer(
+        self,
+        question: str,
+        retrieved_chunks: List[Tuple[DocumentChunk, float]],
+        api_key: Optional[str] = None,
+        allow_llm: bool = True,
+        max_tokens: int = 250,
+    ) -> Tuple[str, str]:
         """
         Generates answer.
         Returns (answer_text, answer_mode) where mode is:
@@ -343,11 +362,11 @@ class RAGEngine:
             context_blocks.append(f"[Page {c.page_number}]: {c.text}")
         context_str = "\n\n".join(context_blocks)
 
-        api_key = os.getenv("OPENAI_API_KEY")
-        if api_key:
+        key = api_key or (os.getenv("OPENAI_API_KEY") if allow_llm else None)
+        if key and allow_llm:
             try:
                 from openai import OpenAI
-                client = OpenAI()
+                client = OpenAI(api_key=key)
                 prompt = (
                     "You are a strict Document Q&A assistant. "
                     "Answer the user's question ONLY using the facts stated in the context snippets below. "
@@ -360,6 +379,7 @@ class RAGEngine:
                 resp = client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[{"role": "user", "content": prompt}],
+                    max_tokens=max_tokens,
                     temperature=0.0,
                 )
                 return resp.choices[0].message.content.strip(), "llm_generative"
