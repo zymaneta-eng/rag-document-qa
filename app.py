@@ -175,9 +175,14 @@ with col_main:
                 with st.expander(f"📄 Page {cit.page_number} (Relevance Score: {cit.relevance_score * 100:.1f}%)"):
                     st.write(cit.snippet)
         else:
-            st.warning("⚠️ **Out of Context / Refusal:**")
-            st.markdown(response.answer)
-            st.caption("The similarity threshold check prevented a hallucinated answer because the document does not contain this information.")
+            st.warning("🛡️ **Groundedness Guard: Information Not Found**")
+            st.markdown(
+                f"**The requested answer could not be found in the active document** (`{st.session_state.active_doc_name}`)."
+            )
+            st.markdown(
+                "> **Zero-Hallucination Policy:** The vector similarity score fell below the confidence cutoff (`relevance < 0.20`). "
+                "Rather than synthesizing an ungrounded guess, the system strictly refuses to answer when source facts are absent."
+            )
 
 with col_info:
     st.subheader("ℹ️ How This Works")
