@@ -27,7 +27,13 @@ st.markdown("""
 
 # Session state initialization
 if "engine" not in st.session_state:
-    st.session_state.engine = RAGEngine(persist_dir="./chroma_db", chunk_size=600, chunk_overlap=100)
+    import uuid
+    session_id = uuid.uuid4().hex[:8]
+    st.session_state.engine = RAGEngine(
+        persist_dir=f"./chroma_db_{session_id}",
+        chunk_size=600,
+        chunk_overlap=100
+    )
     # Pre-index sample document if available
     sample_pdf = Path(__file__).parent / "sample_docs" / "enterprise_sla_policy.pdf"
     if sample_pdf.exists():
@@ -38,6 +44,7 @@ engine: RAGEngine = st.session_state.engine
 # Header
 st.title("📚 RAG Document Q&A Prototype")
 st.caption("Upload a PDF/text file, index into ChromaDB, and ask grounded questions with source page citations.")
+st.warning("🔒 **Privacy Notice:** This is a public demonstration prototype. Please test using sample documents and do not upload confidential or sensitive personal files.")
 
 # Sidebar: Document Management
 st.sidebar.header("📁 Document Ingestion")
