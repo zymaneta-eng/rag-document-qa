@@ -45,12 +45,12 @@ uploaded_file = st.sidebar.file_uploader("Upload PDF or TXT Document", type=["pd
 
 if uploaded_file is not None:
     if st.sidebar.button("⚡ Index Uploaded File", type="primary", use_container_width=True):
-        content = uploaded_file.getvalue()
         if uploaded_file.name.lower().endswith(".pdf"):
             res = engine.ingest_pdf(content, filename=uploaded_file.name)
         else:
             text = content.decode("utf-8", errors="replace")
             res = engine.ingest_text(text, filename=uploaded_file.name)
+        st.session_state.active_doc_name = uploaded_file.name
         st.sidebar.success(f"Indexed: {res.total_chunks} chunks ({res.total_pages} pages)")
         st.rerun()
 
@@ -62,6 +62,10 @@ st.sidebar.markdown(f"**Vector Store:** `ChromaDB (HNSW Cosine)`")
 col_main, col_info = st.columns([2, 1])
 
 with col_main:
+    # Active document badge
+    active_doc_name = getattr(st.session_state, "active_doc_name", "enterprise_sla_policy.pdf (Preloaded Sample)")
+    st.info(f"📄 **Active Document in ChromaDB:** `{active_doc_name}`")
+
     st.subheader("Ask a Question")
 
     # Sample Question buttons
