@@ -183,7 +183,7 @@ with col_main:
             response = engine.query(
                 user_query,
                 top_k=3,
-                min_relevance=0.05,
+                min_relevance=0.01,
                 api_key=effective_key,
                 allow_llm=allow_llm,
             )
