@@ -175,13 +175,13 @@ with col_main:
                 with st.expander(f"📄 Page {cit.page_number} (Relevance Score: {cit.relevance_score * 100:.1f}%)"):
                     st.write(cit.snippet)
         else:
-            st.warning("🛡️ **Groundedness Guard: Information Not Found**")
+            st.info("ℹ️ **Information Not Found in Document**")
             st.markdown(
-                f"**The requested answer could not be found in the active document** (`{st.session_state.active_doc_name}`)."
+                f"The requested answer could not be found in `{st.session_state.active_doc_name}`."
             )
-            st.markdown(
-                "> **Zero-Hallucination Policy:** The vector similarity score fell below the confidence cutoff (`relevance < 0.20`). "
-                "Rather than synthesizing an ungrounded guess, the system strictly refuses to answer when source facts are absent."
+            st.caption(
+                "The vector relevance score fell below the retrieval threshold. "
+                "Answers are only returned when directly supported by verified document passages."
             )
 
 with col_info:
@@ -190,6 +190,6 @@ with col_info:
 1. **Extraction:** `pypdf` extracts text while preserving page numbers.
 2. **Chunking:** Hierarchical recursive text splitting (600 chars, 100 overlap).
 3. **Vector Store:** **ChromaDB** stores dense vectors and metadata.
-4. **Accuracy Guard:** Rejects questions with cosine distance > 0.80 to prevent hallucinations.
+4. **Accuracy Guard:** Rejects queries with cosine distance > 0.80 when verified passages are absent.
 5. **Citations:** Every answer cites the exact source page and excerpt.
     """)
