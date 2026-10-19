@@ -28,7 +28,7 @@ class QueryRequest(BaseModel):
     """Question submission request."""
     question: str = Field(description="Natural language question about the document", min_length=2)
     top_k: int = Field(default=3, ge=1, le=10, description="Number of relevant chunks to retrieve")
-    min_relevance: float = Field(default=0.20, ge=0.0, le=1.0, description="Minimum similarity threshold")
+    min_relevance: float = Field(default=0.05, ge=0.0, le=1.0, description="Minimum similarity threshold")
 
 
 class QueryResponse(BaseModel):

@@ -292,7 +292,7 @@ class RAGEngine:
         self,
         request_question: str,
         top_k: int = 3,
-        min_relevance: float = 0.20,
+        min_relevance: float = 0.05,
         api_key: Optional[str] = None,
         allow_llm: bool = True,
     ) -> QueryResponse:
