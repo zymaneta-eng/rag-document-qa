@@ -15,17 +15,6 @@ A lightweight, API-first **Retrieval-Augmented Generation (RAG)** prototype demo
 
 ---
 
-## 👩‍💻 Hire the Developer / Контакти для замовлення
-
-Потрібна розробка персональної RAG-системи, AI-асистента з пошуком по вашій корпоративній базі знань або автоматизація обробки PDF/документів?
-
-* 💬 **Прямий зв'язок у Telegram:** [@Nataly_Zyma](https://t.me/Nataly_Zyma)
-* 📧 **Офіційний Email:** `areonixwinter@gmail.com`
-* 🤖 **Бот технічної підтримки:** [@AreonixSupport_bot](https://t.me/AreonixSupport_bot)
-* 🏢 **Виконавець:** ФОП Зима Н. М. (офіційна розробка, робота з ФОП/ТОВ за безготівковим розрахунком)
-
----
-
 ## 🏛️ System Architecture
 
 ```mermaid
